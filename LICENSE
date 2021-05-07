@@ -1,15 +1,14 @@
 Business Source License 1.1
 
-License text copyright (c) 2021 Visor Finance, All Rights Reserved.
-"Business Source License" is a trademark of Visor Finance.
+License text copyright (c) 2017 MariaDB Corporation Ab, All Rights Reserved.
+"Business Source License" is a trademark of MariaDB Corporation Ab.
 
 -----------------------------------------------------------------------------
-
 Parameters
 
 Licensor:             Visor Finance
 
-Licensed Work:        Visor V2 Vault Core "Hypervisors"
+Licensed Work:        Visor V2 Vault Core 
                       The Licensed Work is (c) 2021 Visor Finance
 
 Additional Use Grant: Any uses listed and defined at
@@ -64,7 +63,7 @@ EXPRESS OR IMPLIED, INCLUDING (WITHOUT LIMITATION) WARRANTIES OF
 MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, AND
 TITLE.
 
-Visor Finance hereby grants you permission to use this License’s text to license
+MariaDB hereby grants you permission to use this License’s text to license
 your works, and to refer to it using the trademark "Business Source License",
 as long as you comply with the Covenants of Licensor below.
 
