@@ -462,7 +462,7 @@ contract Visor is
         TransferHelper.safeTransfer(token, to, amount);
     }
 
-    /// @notice Transfer ERC20 tokens out of vault
+    /// @notice Transfer ETH out of vault
     /// access control: only owner
     /// state machine: when balance >= amount
     /// state scope: none
@@ -475,6 +475,9 @@ contract Visor is
     }
 
     // @notice Approve delegate account to transfer ERC721 token out of vault
+    /// @param delegate Account address being approved to transfer nft  
+    /// @param nftContract address of nft minter 
+    /// @param tokenId token id of the nft instance 
     function approveTransferERC721(
       address delegate, 
       address nftContract, 
@@ -513,7 +516,6 @@ contract Visor is
     }
 
     // @notice Adjust nfts[] on ERC721 token recieved 
-    /// state machine: called on IERC721-safeTransferFrom to vault 
     function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata) external override returns (bytes4) {
       _addNft(msg.sender, tokenId);
       return IERC721Receiver.onERC721Received.selector;
