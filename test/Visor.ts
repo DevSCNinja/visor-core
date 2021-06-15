@@ -126,7 +126,7 @@ describe("Visor contract", function() {
     await visorFactory.functions['safeTransferFrom(address,address,uint256)'](owner.address, visor.address, tokenId); 
 
     // check nft was deposited
-    let info = await visor.getNftById(0);
+    let info = await visor.getNFTByIndex(0);
     assert(info.tokenId.toString() == tokenId); 
 
     // unnapproved transfer should fail
