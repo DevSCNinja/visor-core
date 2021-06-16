@@ -135,7 +135,7 @@ describe("Visor contract", function() {
     ).to.be.reverted;
     
     // approved transfer
-    await visor.approveTransferERC721(outsider.address, visorFactory.address, tokenId);
+    await visor.approveTransferERC721(outsider.address, visorFactory.address, tokenId, false);
     await visor.transferERC721(outsider.address, visorFactory.address, tokenId);
 
     // transfer back to owner 

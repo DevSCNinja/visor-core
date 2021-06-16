@@ -441,12 +441,6 @@ contract Visor is
     ) external {
 
         bytes32 key = keccak256(abi.encodePacked(msg.sender, token));
-        if(msg.sender != _getOwner()) {
-        require( 
-            erc20Approvals[key] >= amount,
-            "Account not approved to transfer amount"); 
-        } 
-
         // check for sufficient balance
         require(
             IERC20(token).balanceOf(address(this)) >= (getBalanceLocked(token).add(amount)).add(timelockERC20Balances[token]),
@@ -474,12 +468,14 @@ contract Visor is
     /// @param delegate Account address being approved to transfer nft  
     /// @param nftContract address of nft minter 
     /// @param tokenId token id of the nft instance 
+    /// @param approved approval boolean value 
     function approveTransferERC721(
       address delegate, 
       address nftContract, 
-      uint256 tokenId
+      uint256 tokenId,
+      bool approved
     ) external onlyOwner {
-      nftApprovals[keccak256(abi.encodePacked(delegate, nftContract, tokenId))] = true;
+      nftApprovals[keccak256(abi.encodePacked(delegate, nftContract, tokenId))] = approved;
     }
 
     /// @notice Transfer ERC721 out of vault
@@ -494,7 +490,9 @@ contract Visor is
         uint256 tokenId
     ) external {
         if(msg.sender != _getOwner()) {
-          require( nftApprovals[keccak256(abi.encodePacked(msg.sender, nftContract, tokenId))], "NFT not approved for transfer"); 
+          bytes32 key = keccak256(abi.encodePacked(msg.sender, nftContract, tokenId));
+          require( nftApprovals[key], "NFT not approved for transfer"); 
+          nftApprovals[key] = false;
         } 
 
         for(uint256 i=0; i<timelockERC721Keys[nftContract].length; i++) {
@@ -505,6 +503,7 @@ contract Visor is
                 "NFT locked and not expired"
               );
               require( timelockERC721s[key].recipient == msg.sender, "NFT locked and must be withdrawn by timelock recipient");
+              delete timelockERC721s[key];
               break;
           }
         }
@@ -548,7 +547,7 @@ contract Visor is
       timelockERC721Keys[nftContract].push(key);
 
       IERC721(nftContract).safeTransferFrom(msg.sender, address(this), tokenId);
-      emit TimeLockERC20(recipient, nftContract, tokenId, expires);
+      emit TimeLockERC721(recipient, nftContract, tokenId, expires);
     }
 
     // @notice Withdraw ERC721 in vault post expires by recipient
@@ -605,7 +604,7 @@ contract Visor is
       });
       timelockERC20Keys[token].push(key);
       timelockERC20Balances[token] = timelockERC20Balances[token].add(amount);
-      IERC20(token).transferFrom(msg.sender, address(this), amount);
+      TransferHelper.safeTransferFrom(token, msg.sender, address(this), amount);
       emit TimeLockERC20(recipient, token, amount, expires);
     }
 
