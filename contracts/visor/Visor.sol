@@ -66,7 +66,9 @@ contract Visor is
       address nftContract;
     }
 
-    Nft[] public nfts;
+    mapping(bytes32 => Nft) private _nfts;
+    EnumerableSet.Bytes32Set private _nftSet;
+
     mapping(bytes32=>bool) public nftApprovals;
     mapping(bytes32=>uint256) public erc20Approvals;
 
@@ -114,28 +116,20 @@ contract Visor is
 
     function _addNft(address nftContract, uint256 tokenId) internal {
 
-      nfts.push(
-        Nft({
-          tokenId: tokenId,
-          nftContract: nftContract
-        })
-      );
+      bytes32 key = calculateNftID(nftContract, tokenId);
+      // add nft to set
+      assert(_nftSet.add(key));
+      // add nft data to storage
+      _nfts[key] = Nft(tokenId, nftContract);
       emit AddNftToken(nftContract, tokenId);
     }
 
     function _removeNft(address nftContract, uint256 tokenId) internal {
-      uint256 len = nfts.length;
-      for (uint256 i = 0; i < len; i++) {
-        Nft memory nftInfo = nfts[i];
-        if (nftContract == nftInfo.nftContract && tokenId == nftInfo.tokenId) {
-          if(i != len - 1) {
-            nfts[i] = nfts[len - 1];
-          }
-          nfts.pop();
-          emit RemoveNftToken(nftContract, tokenId);
-          break;
-        }
-      }
+      bytes32 key = calculateNftID(nftContract, tokenId);      
+      // update nft storage
+      assert(_nftSet.remove(key));
+      delete _nfts[key];
+      emit RemoveNftToken(nftContract, tokenId);
     }
 
     function _getOwner() internal view override(ERC1271) returns (address ownerAddress) {
@@ -151,6 +145,15 @@ contract Visor is
         returns (bytes32 lockID)
     {
         return keccak256(abi.encodePacked(delegate, token));
+    }
+
+    function calculateNftID(address nftContract, uint256 tokenId)
+        public
+        pure
+        override
+        returns (bytes32 nftId)
+    {
+        return keccak256(abi.encodePacked(nftContract, tokenId));
     }
 
     /* getter functions */
@@ -222,23 +225,23 @@ contract Visor is
     }
 
     // @notice Get ERC721 from nfts[] by index
-    /// @param i nfts index of nfts[] 
-    function getNFTByIndex(uint256 i) external view returns (address nftContract, uint256 tokenId) {
-        require(i < nfts.length, "ID overflow");
-        Nft memory ni = nfts[i];
-        nftContract = ni.nftContract;
-        tokenId = ni.tokenId;
+    /// @param index nfts index of nfts[] 
+    function getNFTByIndex(uint256 index) external view returns (Nft memory nftData) {
+        require(i < _nftSet.length(), "ID overflow");
+        return _nfts[_nftSet.at(index)];
     }
 
     // @notice Get index of ERC721 in nfts[]
     /// @param nftContract Address of ERC721 
     /// @param tokenId tokenId for NFT in nftContract 
     function getNftIdByTokenIdAndAddr(address nftContract, uint256 tokenId) external view returns(uint256) {
-        uint256 len = nfts.length;
-        for (uint256 i = 0; i < len; i++) {
-            if (nftContract == nfts[i].nftContract && tokenId == nfts[i].tokenId) {
-                return i;
-            }
+        // get nftSet id
+        bytes32 key = calculateNftID(nftContract, tokenId);
+        uint256 count = _nftSet.length();
+        for (uint256 index; index < count; index++) {
+          if (_lockSet.at(index) == key) {
+            return index;
+          }
         }
         require(false, "Token not found");
     }
