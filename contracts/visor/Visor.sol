@@ -231,21 +231,6 @@ contract Visor is
         return _nfts[_nftSet.at(index)];
     }
 
-    // @notice Get index of ERC721 in nfts[]
-    /// @param nftContract Address of ERC721 
-    /// @param tokenId tokenId for NFT in nftContract 
-    function getNftIdByTokenIdAndAddr(address nftContract, uint256 tokenId) external view returns(uint256) {
-        // get nftSet id
-        bytes32 key = calculateNftID(nftContract, tokenId);
-        uint256 count = _nftSet.length();
-        for (uint256 index; index < count; index++) {
-          if (_lockSet.at(index) == key) {
-            return index;
-          }
-        }
-        require(false, "Token not found");
-    }
-
     // @notice Get number of timelocks for given ERC20 token 
     function getTimeLockCount(address token) external view returns(uint256) {
       return timelockERC20Keys[token].length;
@@ -516,7 +501,7 @@ contract Visor is
     }
 
     // @notice Adjust nfts[] on ERC721 token recieved 
-    function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata) external override returns (bytes4) {
+    function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata) external override onlyOwner returns (bytes4) {
       _addNft(msg.sender, tokenId);
       return IERC721Receiver.onERC721Received.selector;
     }
