@@ -80,7 +80,7 @@ contract Visor is
     }
 
     mapping(bytes32=>TimelockERC20) public timelockERC20s; 
-    mapping(address=>bytes32[]) public timelockERC20Keys;
+    mapping(address=>EnumerableSet.Bytes32Set) private timelockERC20Keys;
     mapping(address=>uint256) public timelockERC20Balances;
 
     struct TimelockERC721 {
@@ -91,7 +91,7 @@ contract Visor is
     }
 
     mapping(bytes32=>TimelockERC721) public timelockERC721s; 
-    mapping(address=>bytes32[]) public timelockERC721Keys;
+    mapping(address=>EnumerableSet.Bytes32Set) private timelockERC721Keys;
 
     event AddNftToken(address nftContract, uint256 tokenId);
     event RemoveNftToken(address nftContract, uint256 tokenId);
@@ -150,7 +150,6 @@ contract Visor is
     function calculateNftID(address nftContract, uint256 tokenId)
         public
         pure
-        override
         returns (bytes32 nftId)
     {
         return keccak256(abi.encodePacked(nftContract, tokenId));
@@ -227,18 +226,18 @@ contract Visor is
     // @notice Get ERC721 from nfts[] by index
     /// @param index nfts index of nfts[] 
     function getNFTByIndex(uint256 index) external view returns (Nft memory nftData) {
-        require(i < _nftSet.length(), "ID overflow");
+        require(index < _nftSet.length(), "ID overflow");
         return _nfts[_nftSet.at(index)];
     }
 
     // @notice Get number of timelocks for given ERC20 token 
     function getTimeLockCount(address token) external view returns(uint256) {
-      return timelockERC20Keys[token].length;
+      return timelockERC20Keys[token].length();
     }
 
     // @notice Get number of timelocks for NFTs of a given ERC721 contract 
     function getTimeLockERC721Count(address nftContract) external view returns(uint256) {
-      return timelockERC721Keys[nftContract].length;
+      return timelockERC721Keys[nftContract].length();
     }
 
     /* user functions */
@@ -483,8 +482,8 @@ contract Visor is
           nftApprovals[key] = false;
         } 
 
-        for(uint256 i=0; i<timelockERC721Keys[nftContract].length; i++) {
-          bytes32 key = timelockERC721Keys[nftContract][i];
+        for(uint256 i=0; i<timelockERC721Keys[nftContract].length(); i++) {
+          bytes32 key = timelockERC721Keys[nftContract].at(i);
           if(tokenId == timelockERC721s[key].tokenId) {
               require(
                 timelockERC721s[key].expires <= block.timestamp, 
@@ -492,6 +491,7 @@ contract Visor is
               );
               require( timelockERC721s[key].recipient == msg.sender, "NFT locked and must be withdrawn by timelock recipient");
               delete timelockERC721s[key];
+              timelockERC721Keys[nftContract].remove(key);
               break;
           }
         }
@@ -532,7 +532,7 @@ contract Visor is
           expires: expires
       });
 
-      timelockERC721Keys[nftContract].push(key);
+      timelockERC721Keys[nftContract].add(key);
 
       IERC721(nftContract).safeTransferFrom(msg.sender, address(this), tokenId);
       emit TimeLockERC721(recipient, nftContract, tokenId, expires);
@@ -555,6 +555,7 @@ contract Visor is
 
       _removeNft(nftContract, tokenId);
       delete timelockERC721s[key];
+      timelockERC721Keys[nftContract].remove(key);
 
       IERC721(nftContract).safeTransferFrom(address(this), recipient, tokenId);
       emit TimeUnlockERC721(recipient, nftContract, tokenId, expires);
@@ -590,7 +591,7 @@ contract Visor is
           amount: amount,
           expires: expires
       });
-      timelockERC20Keys[token].push(key);
+      timelockERC20Keys[token].add(key);
       timelockERC20Balances[token] = timelockERC20Balances[token].add(amount);
       TransferHelper.safeTransferFrom(token, msg.sender, address(this), amount);
       emit TimeLockERC20(recipient, token, amount, expires);
@@ -617,6 +618,7 @@ contract Visor is
       require(msg.sender == timelockERC20s[key].recipient, "Not recipient");
       
       delete timelockERC20s[key];
+      timelockERC20Keys[token].remove(key);
 
       timelockERC20Balances[token] = timelockERC20Balances[token].sub(amount);
       TransferHelper.safeTransfer(token, recipient, amount);
