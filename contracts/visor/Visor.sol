@@ -501,7 +501,8 @@ contract Visor is
     }
 
     // @notice Adjust nfts[] on ERC721 token recieved 
-    function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata) external override onlyOwner returns (bytes4) {
+    function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata) external override returns (bytes4) {
+      require(owner() == from, "From address is not the owner");
       _addNft(msg.sender, tokenId);
       return IERC721Receiver.onERC721Received.selector;
     }
