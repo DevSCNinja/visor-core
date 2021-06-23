@@ -626,4 +626,19 @@ contract Visor is
       emit TimeUnlockERC20(recipient, token, amount, expires);
     }
 
+    // @notice get timelockERC20Key by address and index
+    /// @param token Address of token
+    /// @param index index of keys Bytes32Set 
+    function getTimelockERC20Key(address token, uint256 index) external returns(bytes32) {
+      require(timelockERC20Keys[token].length() > 0 && timelockERC20Keys[token].length() > index, "Index should be smaller than count");
+      return timelockERC20Keys[token].at(index);
+    }
+
+    // @notice get timelockERC721Key by address and index
+    /// @param nftContract Address of token
+    /// @param index index of keys Bytes32Set 
+    function getTimelockERC721Key(address nftContract, uint256 index) external returns(bytes32) {
+      require(timelockERC721Keys[nftContract].length() > 0 && timelockERC721Keys[nftContract].length() > index, "Index should be smaller than count");
+      return timelockERC721Keys[nftContract].at(index);
+    }
 }
