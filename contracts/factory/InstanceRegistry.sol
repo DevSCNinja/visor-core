@@ -7,7 +7,6 @@ interface IInstanceRegistry {
     /* events */
 
     event InstanceAdded(address instance);
-    event InstanceRemoved(address instance);
 
     /* view functions */
 

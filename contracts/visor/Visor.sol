@@ -60,14 +60,15 @@ contract Visor is
     uint256 private _nonce;
     mapping(bytes32 => LockData) private _locks;
     EnumerableSet.Bytes32Set private _lockSet;
-    string public uri;
 
     struct Nft {
       uint256 tokenId; 
       address nftContract;
     }
 
-    Nft[] public nfts;
+    mapping(bytes32 => Nft) private _nfts;
+    EnumerableSet.Bytes32Set private _nftSet;
+
     mapping(bytes32=>bool) public nftApprovals;
     mapping(bytes32=>uint256) public erc20Approvals;
 
@@ -79,7 +80,7 @@ contract Visor is
     }
 
     mapping(bytes32=>TimelockERC20) public timelockERC20s; 
-    mapping(address=>bytes32[]) public timelockERC20Keys;
+    mapping(address=>EnumerableSet.Bytes32Set) private timelockERC20Keys;
     mapping(address=>uint256) public timelockERC20Balances;
 
     struct TimelockERC721 {
@@ -90,7 +91,7 @@ contract Visor is
     }
 
     mapping(bytes32=>TimelockERC721) public timelockERC721s; 
-    mapping(address=>bytes32[]) public timelockERC721Keys;
+    mapping(address=>EnumerableSet.Bytes32Set) private timelockERC721Keys;
 
     event AddNftToken(address nftContract, uint256 tokenId);
     event RemoveNftToken(address nftContract, uint256 tokenId);
@@ -115,28 +116,20 @@ contract Visor is
 
     function _addNft(address nftContract, uint256 tokenId) internal {
 
-      nfts.push(
-        Nft({
-          tokenId: tokenId,
-          nftContract: nftContract
-        })
-      );
+      bytes32 key = calculateNftID(nftContract, tokenId);
+      // add nft to set
+      assert(_nftSet.add(key));
+      // add nft data to storage
+      _nfts[key] = Nft(tokenId, nftContract);
       emit AddNftToken(nftContract, tokenId);
     }
 
     function _removeNft(address nftContract, uint256 tokenId) internal {
-      uint256 len = nfts.length;
-      for (uint256 i = 0; i < len; i++) {
-        Nft memory nftInfo = nfts[i];
-        if (nftContract == nftInfo.nftContract && tokenId == nftInfo.tokenId) {
-          if(i != len - 1) {
-            nfts[i] = nfts[len - 1];
-          }
-          nfts.pop();
-          emit RemoveNftToken(nftContract, tokenId);
-          break;
-        }
-      }
+      bytes32 key = calculateNftID(nftContract, tokenId);      
+      // update nft storage
+      assert(_nftSet.remove(key));
+      delete _nfts[key];
+      emit RemoveNftToken(nftContract, tokenId);
     }
 
     function _getOwner() internal view override(ERC1271) returns (address ownerAddress) {
@@ -152,6 +145,14 @@ contract Visor is
         returns (bytes32 lockID)
     {
         return keccak256(abi.encodePacked(delegate, token));
+    }
+
+    function calculateNftID(address nftContract, uint256 tokenId)
+        public
+        pure
+        returns (bytes32 nftId)
+    {
+        return keccak256(abi.encodePacked(nftContract, tokenId));
     }
 
     /* getter functions */
@@ -223,35 +224,20 @@ contract Visor is
     }
 
     // @notice Get ERC721 from nfts[] by index
-    /// @param i nfts index of nfts[] 
-    function getNftById(uint256 i) external view returns (address nftContract, uint256 tokenId) {
-        require(i < nfts.length, "ID overflow");
-        Nft memory ni = nfts[i];
-        nftContract = ni.nftContract;
-        tokenId = ni.tokenId;
-    }
-
-    // @notice Get index of ERC721 in nfts[]
-    /// @param nftContract Address of ERC721 
-    /// @param tokenId tokenId for NFT in nftContract 
-    function getNftIdByTokenIdAndAddr(address nftContract, uint256 tokenId) external view returns(uint256) {
-        uint256 len = nfts.length;
-        for (uint256 i = 0; i < len; i++) {
-            if (nftContract == nfts[i].nftContract && tokenId == nfts[i].tokenId) {
-                return i;
-            }
-        }
-        require(false, "Token not found");
+    /// @param index nfts index of nfts[] 
+    function getNFTByIndex(uint256 index) external view returns (Nft memory nftData) {
+        require(index < _nftSet.length(), "ID overflow");
+        return _nfts[_nftSet.at(index)];
     }
 
     // @notice Get number of timelocks for given ERC20 token 
-    function getTimeLockCount(address token) public view returns(uint256) {
-      return timelockERC20Keys[token].length;
+    function getTimeLockCount(address token) external view returns(uint256) {
+      return timelockERC20Keys[token].length();
     }
 
     // @notice Get number of timelocks for NFTs of a given ERC721 contract 
-    function getTimeLockERC721Count(address nftContract) public view returns(uint256) {
-      return timelockERC721Keys[nftContract].length;
+    function getTimeLockERC721Count(address nftContract) external view returns(uint256) {
+      return timelockERC721Keys[nftContract].length();
     }
 
     /* user functions */
@@ -397,10 +383,6 @@ contract Visor is
         emit RageQuit(delegate, token, notified, error);
     }
 
-    function setURI(string memory _uri) public onlyOwner {
-      uri = _uri;
-    }
-
     /// @notice Transfer ERC20 tokens out of vault
     /// access control: only owner
     /// state machine: when balance >= max(lock) + amount
@@ -444,19 +426,14 @@ contract Visor is
         address to,
         uint256 amount
     ) external {
-        if(msg.sender != _getOwner()) {
 
-        require( 
-            erc20Approvals[keccak256(abi.encodePacked(msg.sender, token))] >= amount,
-            "Account not approved to transfer amount"); 
-        } 
-
+        bytes32 key = keccak256(abi.encodePacked(msg.sender, token));
         // check for sufficient balance
         require(
             IERC20(token).balanceOf(address(this)) >= (getBalanceLocked(token).add(amount)).add(timelockERC20Balances[token]),
             "UniversalVault: insufficient balance"
         );
-        erc20Approvals[keccak256(abi.encodePacked(msg.sender, token))] = erc20Approvals[keccak256(abi.encodePacked(msg.sender, token))].sub(amount);
+        erc20Approvals[key] = erc20Approvals[key].sub(amount);
         
         // perform transfer
         TransferHelper.safeTransfer(token, to, amount);
@@ -478,12 +455,14 @@ contract Visor is
     /// @param delegate Account address being approved to transfer nft  
     /// @param nftContract address of nft minter 
     /// @param tokenId token id of the nft instance 
+    /// @param approved approval boolean value 
     function approveTransferERC721(
       address delegate, 
       address nftContract, 
-      uint256 tokenId
+      uint256 tokenId,
+      bool approved
     ) external onlyOwner {
-      nftApprovals[keccak256(abi.encodePacked(delegate, nftContract, tokenId))] = true;
+      nftApprovals[keccak256(abi.encodePacked(delegate, nftContract, tokenId))] = approved;
     }
 
     /// @notice Transfer ERC721 out of vault
@@ -498,16 +477,22 @@ contract Visor is
         uint256 tokenId
     ) external {
         if(msg.sender != _getOwner()) {
-          require( nftApprovals[keccak256(abi.encodePacked(msg.sender, nftContract, tokenId))], "NFT not approved for transfer"); 
+          bytes32 key = keccak256(abi.encodePacked(msg.sender, nftContract, tokenId));
+          require( nftApprovals[key], "NFT not approved for transfer"); 
+          nftApprovals[key] = false;
         } 
 
-        for(uint256 i=0; i<timelockERC721Keys[nftContract].length; i++) {
-          if(tokenId == timelockERC721s[timelockERC721Keys[nftContract][i]].tokenId) {
+        for(uint256 i=0; i<timelockERC721Keys[nftContract].length(); i++) {
+          bytes32 key = timelockERC721Keys[nftContract].at(i);
+          if(tokenId == timelockERC721s[key].tokenId) {
               require(
-                timelockERC721s[timelockERC721Keys[nftContract][i]].expires <= block.timestamp, 
+                timelockERC721s[key].expires <= block.timestamp, 
                 "NFT locked and not expired"
               );
-              require( timelockERC721s[timelockERC721Keys[nftContract][i]].recipient == msg.sender, "NFT locked and must be withdrawn by timelock recipient");
+              require( timelockERC721s[key].recipient == msg.sender, "NFT locked and must be withdrawn by timelock recipient");
+              delete timelockERC721s[key];
+              timelockERC721Keys[nftContract].remove(key);
+              break;
           }
         }
 
@@ -517,6 +502,7 @@ contract Visor is
 
     // @notice Adjust nfts[] on ERC721 token recieved 
     function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata) external override returns (bytes4) {
+      require(owner() == from, "From address is not the owner");
       _addNft(msg.sender, tokenId);
       return IERC721Receiver.onERC721Received.selector;
     }
@@ -526,7 +512,7 @@ contract Visor is
     /// @param nftContract address of nft minter 
     /// @param tokenId Token id of the nft instance 
     /// @param expires Timestamp when recipient is allowed to withdraw 
-    function timeLockERC721(address recipient, address nftContract, uint256 tokenId, uint256 expires) public onlyOwner {
+    function timeLockERC721(address recipient, address nftContract, uint256 tokenId, uint256 expires) external onlyOwner {
 
       require(
         expires > block.timestamp, 
@@ -547,10 +533,10 @@ contract Visor is
           expires: expires
       });
 
-      timelockERC721Keys[nftContract].push(key);
+      timelockERC721Keys[nftContract].add(key);
 
       IERC721(nftContract).safeTransferFrom(msg.sender, address(this), tokenId);
-      emit TimeLockERC20(recipient, nftContract, tokenId, expires);
+      emit TimeLockERC721(recipient, nftContract, tokenId, expires);
     }
 
     // @notice Withdraw ERC721 in vault post expires by recipient
@@ -558,7 +544,7 @@ contract Visor is
     /// @param nftContract address of nft minter 
     /// @param tokenId Token id of the nft instance 
     /// @param expires Timestamp when recipient is allowed to withdraw
-    function timeUnlockERC721(address recipient, address nftContract, uint256 tokenId, uint256 expires) public {
+    function timeUnlockERC721(address recipient, address nftContract, uint256 tokenId, uint256 expires) external {
 
       bytes32 key = keccak256(abi.encodePacked(recipient, nftContract, tokenId, expires)); 
       require(
@@ -570,6 +556,7 @@ contract Visor is
 
       _removeNft(nftContract, tokenId);
       delete timelockERC721s[key];
+      timelockERC721Keys[nftContract].remove(key);
 
       IERC721(nftContract).safeTransferFrom(address(this), recipient, tokenId);
       emit TimeUnlockERC721(recipient, nftContract, tokenId, expires);
@@ -580,7 +567,7 @@ contract Visor is
     /// @param token Address of token to lock 
     /// @param amount Amount of token to lock 
     /// @param expires Timestamp when recipient is allowed to withdraw
-    function timeLockERC20(address recipient, address token, uint256 amount, uint256 expires) public onlyOwner {
+    function timeLockERC20(address recipient, address token, uint256 amount, uint256 expires) external onlyOwner {
 
       require(
         IERC20(token).allowance(msg.sender, address(this)) >= amount, 
@@ -605,9 +592,9 @@ contract Visor is
           amount: amount,
           expires: expires
       });
-      timelockERC20Keys[token].push(key);
+      timelockERC20Keys[token].add(key);
       timelockERC20Balances[token] = timelockERC20Balances[token].add(amount);
-      IERC20(token).transferFrom(msg.sender, address(this), amount);
+      TransferHelper.safeTransferFrom(token, msg.sender, address(this), amount);
       emit TimeLockERC20(recipient, token, amount, expires);
     }
 
@@ -616,7 +603,7 @@ contract Visor is
     /// @param token Address of token to lock 
     /// @param amount Amount of token to lock 
     /// @param expires Timestamp when recipient is allowed to withdraw
-    function timeUnlockERC20(address recipient, address token, uint256 amount, uint256 expires) public {
+    function timeUnlockERC20(address recipient, address token, uint256 amount, uint256 expires) external {
 
       require(
         IERC20(token).balanceOf(address(this)) >= getBalanceLocked(token).add(amount),
@@ -632,10 +619,26 @@ contract Visor is
       require(msg.sender == timelockERC20s[key].recipient, "Not recipient");
       
       delete timelockERC20s[key];
+      timelockERC20Keys[token].remove(key);
 
       timelockERC20Balances[token] = timelockERC20Balances[token].sub(amount);
       TransferHelper.safeTransfer(token, recipient, amount);
       emit TimeUnlockERC20(recipient, token, amount, expires);
     }
 
+    // @notice get timelockERC20Key by address and index
+    /// @param token Address of token
+    /// @param index index of keys Bytes32Set 
+    function getTimelockERC20Key(address token, uint256 index) external returns(bytes32) {
+      require(timelockERC20Keys[token].length() > 0 && timelockERC20Keys[token].length() > index, "Index should be smaller than count");
+      return timelockERC20Keys[token].at(index);
+    }
+
+    // @notice get timelockERC721Key by address and index
+    /// @param nftContract Address of token
+    /// @param index index of keys Bytes32Set 
+    function getTimelockERC721Key(address nftContract, uint256 index) external returns(bytes32) {
+      require(timelockERC721Keys[nftContract].length() > 0 && timelockERC721Keys[nftContract].length() > index, "Index should be smaller than count");
+      return timelockERC721Keys[nftContract].at(index);
+    }
 }
