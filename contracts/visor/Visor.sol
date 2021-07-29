@@ -19,7 +19,6 @@ import {OwnableERC721} from "./OwnableERC721.sol";
 import {IRageQuit} from "../hypervisor/Hypervisor.sol";
 
 import {IUniversalVault} from "../interfaces/IUniversalVault.sol";
-import {IVisorService} from "../interfaces/IVisorService.sol";
 
 /// @title Visor
 /// @notice Vault for isolated storage of staking tokens
@@ -93,12 +92,12 @@ contract Visor is
     mapping(bytes32=>TimelockERC721) public timelockERC721s; 
     mapping(address=>EnumerableSet.Bytes32Set) private timelockERC721Keys;
 
-    event AddNftToken(address nftContract, uint256 tokenId);
-    event RemoveNftToken(address nftContract, uint256 tokenId);
-    event TimeLockERC20(address recipient, address token, uint256 amount, uint256 expires);
-    event TimeUnlockERC20(address recipient, address token, uint256 amount, uint256 expires);
-    event TimeLockERC721(address recipient, address nftContract, uint256 tokenId, uint256 expires);
-    event TimeUnlockERC721(address recipient, address nftContract, uint256 tokenId, uint256 expires);
+    event AddNftToken(address indexed nftContract, uint256 indexed tokenId);
+    event RemoveNftToken(address indexed nftContract, uint256 indexed tokenId);
+    event TimeLockERC20(address indexed recipient, address indexed token, uint256 amount, uint256 expires);
+    event TimeUnlockERC20(address indexed recipient, address indexed token, uint256 amount, uint256 expires);
+    event TimeLockERC721(address indexed recipient, address indexed nftContract, uint256 indexed tokenId, uint256 expires);
+    event TimeUnlockERC721(address indexed recipient, address indexed nftContract, uint256 indexed tokenId, uint256 expires);
 
     /* initialization function */
 
